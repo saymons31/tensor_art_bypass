@@ -232,7 +232,7 @@ Detalhes e checklist de manutenção estão no cabeçalho comentado de `tensorar
 
 ## Licença
 
-AGNU GPLv3
+GNU AGPLv3
 
 ---
 
