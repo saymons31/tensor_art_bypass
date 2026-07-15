@@ -11,7 +11,7 @@
 // @grant       GM.xmlHttpRequest
 // @connect     api.tensor.art
 // @connect     *
-// @license AGPL-3.0-or-later
+// @license AGPL-3.0-or-later; https://www.gnu.org/licenses/agpl-3.0.txt
 // ==/UserScript==
 
 /**
