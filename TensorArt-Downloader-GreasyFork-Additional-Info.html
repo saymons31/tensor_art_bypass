@@ -1,0 +1,228 @@
+<p><strong>TensorArt Downloader</strong> adiciona um botão de download em gerações do <a href="https://tensor.art/" target="_blank" rel="noopener noreferrer">Tensor.Art</a> quando a interface marca o conteúdo como restrito/bloqueado e desativa o download nativo.</p>
+
+<p>Baseado no userscript original de <em>Angry Toenail</em> (v0.2), com melhorias de robustez: contorno de CORS, várias fontes de URL, download real do arquivo e <strong>diagnóstico automático</strong> quando o site muda e o script quebra.</p>
+
+<hr>
+
+<h2>Recursos</h2>
+<ul>
+  <li>Injeta botão <strong>Download</strong> em itens bloqueados na lista de tasks/gerações</li>
+  <li>Resolve a mídia por várias fontes: JSON da task, DOM, índice de respostas da API, e endpoint de download</li>
+  <li>Salva o arquivo de verdade (blob), em vez de só abrir em nova aba</li>
+  <li>Autenticação via sessão logada (cookie / Bearer)</li>
+  <li>Quase silencioso quando funciona; gera relatório só se falhar por possível atualização do site</li>
+  <li>API de debug no console: <code>__TADL.help()</code></li>
+</ul>
+
+<hr>
+
+<h2>Requisitos</h2>
+<ul>
+  <li>Navegador com <a href="https://www.tampermonkey.net/" target="_blank" rel="noopener noreferrer">Tampermonkey</a>, <a href="https://violentmonkey.github.io/" target="_blank" rel="noopener noreferrer">Violentmonkey</a> ou similar</li>
+  <li>Conta logada em <code>https://tensor.art/</code></li>
+  <li>Permissões do script: <code>GM_xmlhttpRequest</code> e acesso a <code>api.tensor.art</code> (aceite quando o manager pedir)</li>
+</ul>
+
+<hr>
+
+<h2>Instalação</h2>
+<ol>
+  <li>Instale um gerenciador de userscripts (Tampermonkey / Violentmonkey).</li>
+  <li>Clique em <strong>Install this script</strong> nesta página do Greasy Fork.</li>
+  <li>Confirme a instalação e as permissões de domínio, se solicitadas.</li>
+  <li>Abra <a href="https://tensor.art/" target="_blank" rel="noopener noreferrer">tensor.art</a> e faça login.</li>
+  <li>Recarregue a página com <kbd>Ctrl</kbd>+<kbd>F5</kbd>.</li>
+</ol>
+
+<p><strong>Importante:</strong> desative outras cópias antigas do mesmo script. Duas versões ativas no mesmo site podem conflitar.</p>
+
+<hr>
+
+<h2>Como usar</h2>
+<ol>
+  <li>Entre na área de gerações / histórico de tasks onde há mídia com download bloqueado na UI.</li>
+  <li>Aguarde o card carregar. O botão bloqueado deve virar <strong>Download</strong>.</li>
+  <li>Clique em <strong>Download</strong>.
+    <ul>
+      <li><strong>Done</strong> — arquivo salvo</li>
+      <li><strong>Fail</strong> — falhou (veja diagnóstico abaixo)</li>
+    </ul>
+  </li>
+</ol>
+
+<p>No console do navegador (<kbd>F12</kbd> → Console), ao carregar a página você deve ver algo como:</p>
+<pre> [TA-DL] v0.3.7 ready | token=yes | GM_xhr=yes | ...
+</pre>
+
+<ul>
+  <li><code>token=yes</code> — cookie de sessão encontrado (logado)</li>
+  <li><code>GM_xhr=yes</code> — permissão de rede do userscript OK</li>
+</ul>
+
+<hr>
+
+<h2>Como funciona (resumo técnico)</h2>
+<ol>
+  <li>Intercepta respostas da API que contêm <code>/query</code> (lista de tasks).</li>
+  <li>Localiza no DOM os itens com classe de bloqueio (<code>.group.cursor-not-allowed</code>).</li>
+  <li>Associa cada card ao item da API (ex.: <code>imageId</code>).</li>
+  <li>Monta candidatos de URL, nesta lógica geral:
+    <ol>
+      <li>URLs já vistas em respostas da API (índice em memória)</li>
+      <li>Campos do JSON do item da task</li>
+      <li>Tags <code>&lt;img&gt;</code> / <code>&lt;video&gt;</code> no card</li>
+      <li>Recursos de rede da página que contêm o id</li>
+      <li>Endpoint <code>POST /works/v1/generation/image/download</code> (fallback)</li>
+    </ol>
+  </li>
+  <li>Baixa o melhor candidato via <code>GM_xmlhttpRequest</code> (evita bloqueio CORS do <code>fetch</code> da página).</li>
+</ol>
+
+<hr>
+
+<h2>Diagnóstico automático (quebra por atualização do site)</h2>
+<p>Quando o Tensor.Art muda layout ou API e o script falha de forma “estrutural”, ele pode gerar sozinho um relatório:</p>
+<ul>
+  <li>Toast laranja na página</li>
+  <li>Grupo no console: <code>[TA-DL] UPDATE DIAGNOSTIC</code></li>
+  <li>Download automático de <code>ta-dl-diag-&lt;timestamp&gt;.json</code></li>
+  <li>Histórico em <code>localStorage</code> (últimos relatórios)</li>
+</ul>
+<p>Em downloads bem-sucedidos o script permanece quase silencioso. Relatórios iguais são limitados (debounce ~90s) para não spammar.</p>
+
+<p>O JSON do relatório inclui códigos de erro, o que provavelmente mudou, o que editar no script, probe de seletores DOM, amostra do JSON do item e tentativas da API.</p>
+
+<h3>Códigos mais comuns</h3>
+<table>
+  <thead>
+    <tr>
+      <th>Código</th>
+      <th>Significado / onde olhar</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>PAYLOAD_NO_TASKS</code></td>
+      <td>Resposta do <code>/query</code> sem <code>data.tasks[]</code></td>
+    </tr>
+    <tr>
+      <td><code>DOM_TASK_NOT_FOUND</code></td>
+      <td>Card da task não encontrado (CSS/layout mudou)</td>
+    </tr>
+    <tr>
+      <td><code>ITEM_MISSING_ID</code></td>
+      <td>Item sem <code>imageId</code> (ou campos equivalentes)</td>
+    </tr>
+    <tr>
+      <td><code>ITEM_NO_URLS</code></td>
+      <td>JSON do item sem URL de mídia</td>
+    </tr>
+    <tr>
+      <td><code>DOWNLOAD_API_FAIL</code></td>
+      <td>Endpoint de download / auth / body falhou</td>
+    </tr>
+    <tr>
+      <td><code>NO_CANDIDATES</code></td>
+      <td>Nenhuma URL utilizável encontrada</td>
+    </tr>
+    <tr>
+      <td><code>ALL_CANDIDATES_FAILED</code></td>
+      <td>Havia URLs, mas todas falharam ou eram placeholder</td>
+    </tr>
+    <tr>
+      <td><code>TOKEN_MISSING</code></td>
+      <td>Não logado / cookie de sessão ausente</td>
+    </tr>
+    <tr>
+      <td><code>GM_XHR_MISSING</code></td>
+      <td><code>@grant GM_xmlhttpRequest</code> não aplicado</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>Comandos no console</h2>
+<p>Com a página do Tensor.Art aberta:</p>
+<pre>__TADL.help()           // guia resumido
+__TADL.diag.last()      // último relatório de quebra
+__TADL.diag.history()   // histórico salvo
+__TADL.diag.export()    // baixar de novo o último .json
+__TADL.diag.clear()     // limpar histórico
+__TADL.dump()           // índices internos + último diag
+__TADL.contract         // seletores/paths que o script espera
+__TADL.version          // versão do script
+</pre>
+
+<hr>
+
+<h2>Solução de problemas</h2>
+<ul>
+  <li><strong>Botão não aparece</strong>
+    <ul>
+      <li>Confirme que está logado e que a lista de tasks recarregou</li>
+      <li>Veja se o console mostra <code>token=yes</code> e <code>GM_xhr=yes</code></li>
+      <li>Desative outras cópias do script</li>
+      <li>O layout do site pode ter mudado → aguarde um relatório ou use <code>__TADL.dump()</code></li>
+    </ul>
+  </li>
+  <li><strong>Fail ao clicar</strong>
+    <ul>
+      <li>Se baixou <code>ta-dl-diag-*.json</code>, abra e leia <code>codes</code> e <code>whatToFix</code></li>
+      <li>Às vezes a API devolve só imagem “forbidden”/placeholder de moderação; o script tenta outras fontes no JSON/DOM</li>
+    </ul>
+  </li>
+  <li><strong>token=NO</strong> — faça login de novo e recarregue a página</li>
+  <li><strong>GM_xhr=NO</strong> — reinstale o script e aceite as permissões do manager</li>
+</ul>
+
+<hr>
+
+<h2>Privacidade e segurança</h2>
+<ul>
+  <li>O script roda só em <code>tensor.art</code> (conforme <code>@match</code>).</li>
+  <li>Usa o token de sessão já presente no navegador para chamar a API do próprio Tensor.Art.</li>
+  <li>Não envia seus dados para servidores de terceiros.</li>
+  <li>Relatórios de diagnóstico ficam no seu PC (download local + <code>localStorage</code> do site).</li>
+  <li>Como todo userscript, revise o código antes de instalar.</li>
+</ul>
+
+<hr>
+
+<h2>Limitações</h2>
+<ul>
+  <li>Depende do layout e das APIs atuais do Tensor.Art; mudanças no site podem quebrar seletores ou endpoints.</li>
+  <li>Se o backend deixar de expor a mídia no JSON e só servir placeholder na API de download, pode ser impossível recuperar o arquivo só pelo browser.</li>
+  <li>A assinatura HMAC da API de download usa o esquema compatível com o script original (0.2). Se a API passar a validar sign de forma rígida, essa parte precisará de atualização.</li>
+  <li>Uso sob sua responsabilidade e de acordo com os termos do Tensor.Art e a legislação local.</li>
+</ul>
+
+<hr>
+
+<h2>Changelog (resumo)</h2>
+<ul>
+  <li><strong>0.3.7</strong> — Guia embutido no código + <code>__TADL.help()</code></li>
+  <li><strong>0.3.6</strong> — Diagnóstico automático em falhas por atualização do site</li>
+  <li><strong>0.3.5</strong> — Correção de candidatos zerados + headers de download estáveis (versão que voltou a baixar corretamente)</li>
+  <li><strong>0.3.2–0.3.4</strong> — CORS via GM_xhr, multi-fonte de URL, índice de mídia</li>
+  <li><strong>0.2</strong> — Script original (Angry Toenail)</li>
+</ul>
+
+<hr>
+
+<h2>Créditos</h2>
+<ul>
+  <li>Ideia e base original: <strong>Angry Toenail</strong> (userscript TensorArt Downloader 0.2)</li>
+  <li>Refinamentos: multi-fonte de URL, GM_xmlhttpRequest, download em blob, diagnóstico de quebra</li>
+</ul>
+
+<hr>
+
+<h2>Feedback</h2>
+<p>Se o script parar após uma atualização do Tensor.Art:</p>
+<ol>
+  <li>Reproduza o erro uma vez</li>
+  <li>Anexe o arquivo <code>ta-dl-diag-*.json</code> (se tiver sido gerado) no feedback/issue</li>
+  <li>Ou cole a saída de <code>__TADL.diag.last()</code> e <code>__TADL.help()</code></li>
+</ol>
+<p>Isso indica exatamente qual parte mudou (DOM, payload ou API) e acelera a correção.</p>
