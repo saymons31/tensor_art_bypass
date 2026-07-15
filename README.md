@@ -232,13 +232,7 @@ Detalhes e checklist de manutenção estão no cabeçalho comentado de `tensorar
 
 ## Licença
 
-Indique a licença que preferir ao publicar (ex.: MIT). O script original do gist não declara licença de forma explícita neste repositório — ao redistribuir, preserve os créditos do autor original.
-
-Sugestão de cabeçalho MIT (se você for o mantenedor da versão refinada):
-
-```text
-MIT License — use, copie e modifique livremente, com preservação dos avisos de crédito.
-```
+AGNU GPLv3
 
 ---
 
